@@ -22,7 +22,7 @@ Expected output:
 
 ```text
 local_tile_copy verify: OK
-shape=(256, 384) tile=(16, 16) max_abs_err=0.0
+shape=(256, 384) tile=(32, 32) max_abs_err=0.0
 ```
 
 This chapter avoids edge-tile predicates, so the matrix shape must be divisible
@@ -41,22 +41,22 @@ src_tile = cute.local_tile(src, (TILE_M, TILE_N), (block_m, block_n))
 dst_tile = cute.local_tile(dst, (TILE_M, TILE_N), (block_m, block_n))
 ```
 
-For `TILE_M = TILE_N = 16`, CTA `(0, 0)` sees:
+For `TILE_M = TILE_N = 32`, CTA `(0, 0)` sees:
 
 ```text
-src[0:16, 0:16]
+src[0:32, 0:32]
 ```
 
 CTA `(1, 0)` sees:
 
 ```text
-src[16:32, 0:16]
+src[32:64, 0:32]
 ```
 
 CTA `(0, 1)` sees:
 
 ```text
-src[0:16, 16:32]
+src[0:32, 32:64]
 ```
 
 The kernel then indexes within the CTA-local tile:
@@ -69,6 +69,9 @@ dst_tile[row, col] = src_tile[row, col]
 
 So `row` and `col` are local tile coordinates, not global matrix coordinates.
 The tile view carries the global offset implied by `(block_m, block_n)`.
+
+With `32 x 32` tiles and `256` threads per CTA, each CTA has `1024` tile
+elements and each thread handles up to four elements through the `while` loop.
 
 ## Why Not Use the Chapter 5 Indexing?
 

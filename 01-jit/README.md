@@ -138,6 +138,10 @@ The meta-stage runs **once**, during `cute.compile`. Each subsequent
 parses the Python runtime arguments, converts them to C-ABI–compatible types,
 and launches the host function directly.
 
+## Dump Generated IR
+
+One way is to run the command with `CUTE_DSL_KEEP=ir` which dumps the generated IR to files in the current working dir.
+
 ## Files
 
 - `main.py` — both demos in one script: direct `@cute.jit` calls (meta-stage

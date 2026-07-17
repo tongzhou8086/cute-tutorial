@@ -1,0 +1,8 @@
+# CuTe DSL / CUTLASS build artifacts (from CUTE_DSL_KEEP=ir,ir-debug,ptx,cubin)
+*.mlir
+*.ptx
+*.cubin
+
+# Python
+__pycache__/
+*.py[cod]

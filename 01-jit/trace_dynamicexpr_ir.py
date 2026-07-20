@@ -18,8 +18,8 @@ def dump_block(label: str) -> None:
 def add_dynamicexpr(b: cutlass.Float32):
     dump_block("entry")
 
-    a = cutlass.Float32(2.0)
-    dump_block("after a = cutlass.Float32(2.0)")
+    a: cutlass.Float32 = 2.0
+    dump_block("after a: cutlass.Float32 = 2.0")
 
     result = a + b
     dump_block("after result = a + b")

@@ -154,7 +154,7 @@ import cutlass.cute as cute
 
 @cute.jit
 def add_dynamicexpr(b: cutlass.Float32):
-    a = cutlass.Float32(2.0)
+    a: cutlass.Float32 = 2.0
     result = a + b
     print("[meta-stage] result =", result)  
     cute.printf("[object-stage] result = %f\n", result)  
@@ -225,7 +225,7 @@ add_dynamicexpr(5.0)
 \begin{TraceCode}
 !color{TraceDone}@cute.jit
 !color{TraceDone}def add_dynamicexpr(b: cutlass.Float32):
-!color{TraceDone}    a = cutlass.Float32(2.0)
+!color{TraceDone}    a: cutlass.Float32 = 2.0
 !color{TraceFuture}    result = a + b
 !color{TraceFuture}    print("[meta-stage] result =", result)
 !color{TraceFuture}    cute.printf("[object-stage] result = %f\n",
@@ -254,7 +254,7 @@ add_dynamicexpr(5.0)
 \begin{TraceCode}
 !color{TraceDone}@cute.jit
 !color{TraceDone}def add_dynamicexpr(b: cutlass.Float32):
-!color{TraceDone}    a = cutlass.Float32(2.0)
+!color{TraceDone}    a: cutlass.Float32 = 2.0
 !color{TraceDone}    result = a + b
 !color{TraceFuture}    print("[meta-stage] result =", result)
 !color{TraceFuture}    cute.printf("[object-stage] result = %f\n",
@@ -284,7 +284,7 @@ add_dynamicexpr(5.0)
 \begin{TraceCode}
 !color{TraceDone}@cute.jit
 !color{TraceDone}def add_dynamicexpr(b: cutlass.Float32):
-!color{TraceDone}    a = cutlass.Float32(2.0)
+!color{TraceDone}    a: cutlass.Float32 = 2.0
 !color{TraceDone}    result = a + b
 !color{TraceDone}    print("[meta-stage] result =", result)
 !color{TraceFuture}    cute.printf("[object-stage] result = %f\n",
@@ -314,7 +314,7 @@ add_dynamicexpr(5.0)
 \begin{TraceCode}
 !color{TraceDone}@cute.jit
 !color{TraceDone}def add_dynamicexpr(b: cutlass.Float32):
-!color{TraceDone}    a = cutlass.Float32(2.0)
+!color{TraceDone}    a: cutlass.Float32 = 2.0
 !color{TraceDone}    result = a + b
 !color{TraceDone}    print("[meta-stage] result =", result)
 !color{TraceDone}    cute.printf("[object-stage] result = %f\n",
@@ -349,8 +349,7 @@ cute.print("[object-stage] result = %f\0A\0A", %0) : f32
 \begin{TraceCode}
 !color{TraceDone}@cute.jit
 !color{TraceDone}def add_constexpr(b: cutlass.Constexpr):
-!color{TraceDone}    a = cutlass.const_expr(
-!color{TraceDone}        cutlass.Float32(2.0))
+!color{TraceDone}    a: cutlass.Float32 = 2.0
 !color{TraceDone}    result = a + b
 !color{TraceDone}    print("[meta-stage] result =", result)
 !color{TraceFuture}    cute.printf("[object-stage] result = %f\n",
@@ -383,8 +382,7 @@ cute.print("[object-stage] result = %f\0A\0A", %0) : f32
 \begin{TraceCode}
 !color{TraceDone}@cute.jit
 !color{TraceDone}def add_constexpr(b: cutlass.Constexpr):
-!color{TraceDone}    a = cutlass.const_expr(
-!color{TraceDone}        cutlass.Float32(2.0))
+!color{TraceDone}    a: cutlass.Float32 = 2.0
 !color{TraceDone}    result = a + b
 !color{TraceDone}    print("[meta-stage] result =", result)
 !color{TraceDone}    cute.printf("[object-stage] result = %f\n",

@@ -342,6 +342,75 @@ cute.print("[object-stage] result = %f\0A\0A", %0) : f32
 \end{columns}
 \end{frame}
 
+\begin{frame}[fragile]{Tracing Step by Step: \code{add_constexpr(5.0)}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Tracing code}
+\begin{TraceCode}
+!color{TraceDone}@cute.jit
+!color{TraceDone}def add_constexpr(b: cutlass.Constexpr):
+!color{TraceDone}    a = cutlass.const_expr(
+!color{TraceDone}        cutlass.Float32(2.0))
+!color{TraceDone}    result = a + b
+!color{TraceDone}    print("[meta-stage] result =", result)
+!color{TraceFuture}    cute.printf("[object-stage] result = %f\n",
+!color{TraceFuture}                result)
+\end{TraceCode}
+  \end{column}
+  \begin{column}{0.52\textwidth}
+    \small\textbf{MLIR}
+\begin{lstlisting}[style=traceir]
+// no IR operation yet
+\end{lstlisting}
+
+    \vspace{0.45em}
+    \small\textbf{Terminal}
+\begin{lstlisting}[style=terminal]
+[meta-stage] result = 7.0
+\end{lstlisting}
+
+    \vspace{0.25em}
+    \footnotesize\color{TraceNote}
+    Both inputs are known at trace time; \code{a} is explicitly typed as \code{Float32}.
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tracing Step by Step: \code{add_constexpr(5.0)}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Tracing code}
+\begin{TraceCode}
+!color{TraceDone}@cute.jit
+!color{TraceDone}def add_constexpr(b: cutlass.Constexpr):
+!color{TraceDone}    a = cutlass.const_expr(
+!color{TraceDone}        cutlass.Float32(2.0))
+!color{TraceDone}    result = a + b
+!color{TraceDone}    print("[meta-stage] result =", result)
+!color{TraceDone}    cute.printf("[object-stage] result = %f\n",
+!color{TraceDone}                result)
+\end{TraceCode}
+  \end{column}
+  \begin{column}{0.52\textwidth}
+    \small\textbf{MLIR}
+\begin{lstlisting}[style=traceir]
+%cst = arith.constant 7.000000e+00 : f32
+cute.print("[object-stage] result = %f\0A\0A", %cst) : f32
+\end{lstlisting}
+
+    \vspace{0.45em}
+    \small\textbf{Terminal}
+\begin{lstlisting}[style=terminal]
+[meta-stage] result = 7.0
+\end{lstlisting}
+
+    \vspace{0.25em}
+    \footnotesize\color{TraceNote}
+    The generated IR has no runtime \texttt{\%arg0}; the value was baked in.
+  \end{column}
+\end{columns}
+\end{frame}
+
 \begin{frame}[fragile]{Trace-Time Branching: \code{if cutlass.const_expr(...)}}
 \begin{columns}[T,totalwidth=\textwidth]
   \begin{column}{0.48\textwidth}

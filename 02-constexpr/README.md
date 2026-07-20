@@ -27,11 +27,18 @@ argument stays as a regular function argument (`%arg0`).
 
 # Trace-time branch selection
 
+`trace_constexpr_dynamicexpr_ir.py` instruments the same add example as the
+JIT chapter, but with the parameter marked as `cutlass.Constexpr` and the local
+typed literal marked with `cutlass.const_expr(cutlass.Float32(2.0))`. The
+generated IR bakes in the value instead of passing it as a runtime `%arg0`.
+
 `trace_if_constexpr_ir.py` instruments a branch guarded by `cutlass.const_expr`.
-Only the selected branch is traced and emitted; the other branch does not appear in the generated MLIR.
+Only the selected branch is traced and emitted; the other branch does not appear
+in the generated MLIR.
 
 Run:
 
 ```
+python 02-constexpr/trace_constexpr_dynamicexpr_ir.py
 python 02-constexpr/trace_if_constexpr_ir.py
 ```

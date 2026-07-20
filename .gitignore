@@ -6,3 +6,8 @@
 # Python
 __pycache__/
 *.py[cod]
+
+# Slide build output
+slides/build/
+slides/*.fls
+slides/*.fdb_latexmk

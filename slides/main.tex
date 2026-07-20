@@ -1,0 +1,420 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+\setbeamertemplate{navigation symbols}{}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fancyvrb}
+\usepackage{minted}
+\usepackage{hyperref}
+
+\definecolor{CodeBg}{RGB}{248,248,248}
+\definecolor{CodeFrame}{RGB}{220,220,220}
+\definecolor{CodeKeyword}{RGB}{0,70,140}
+\definecolor{CodeComment}{RGB}{92,112,92}
+\definecolor{CodeString}{RGB}{150,60,30}
+\definecolor{TraceDone}{RGB}{20,20,20}
+\definecolor{TraceFuture}{RGB}{155,155,155}
+\definecolor{TraceNote}{RGB}{82,82,82}
+\definecolor{TerminalBg}{RGB}{36,40,44}
+\definecolor{TerminalText}{RGB}{235,238,240}
+
+\lstdefinestyle{python}{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{CodeKeyword}\bfseries,
+  commentstyle=\color{CodeComment},
+  stringstyle=\color{CodeString},
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  framerule=0.3pt,
+  rulecolor=\color{CodeFrame},
+  backgroundcolor=\color{CodeBg},
+  breaklines=true,
+  tabsize=2
+}
+
+\lstdefinestyle{mlir}{
+  basicstyle=\ttfamily\scriptsize,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  framerule=0.3pt,
+  rulecolor=\color{CodeFrame},
+  backgroundcolor=\color{CodeBg},
+  breaklines=true
+}
+
+\lstdefinestyle{traceir}{
+  basicstyle=\ttfamily\tiny,
+  columns=fullflexible,
+  keepspaces=true,
+  backgroundcolor=\color{CodeBg},
+  breaklines=true,
+  tabsize=2,
+  escapeinside={(*@}{@*)}
+}
+
+\lstdefinestyle{terminal}{
+  basicstyle=\ttfamily\tiny\color{TerminalText},
+  columns=fullflexible,
+  keepspaces=true,
+  backgroundcolor=\color{TerminalBg},
+  breaklines=true,
+  tabsize=2
+}
+
+\DefineVerbatimEnvironment{TraceCode}{Verbatim}{
+  fontsize=\scriptsize,
+  commandchars=!\{\}
+}
+
+\setminted{
+  fontsize=\small,
+  breaklines,
+  autogobble,
+  frame=single,
+  framesep=2mm
+}
+
+\newcommand{\RepoURL}{https://github.com/tongzhou8086/cute-tutorial/blob/main}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\codefile}[1]{\href{\RepoURL/#1}{\texttt{\detokenize{#1}}}}
+
+\title[CuTe DSL Overview]{CuTe DSL Overview}
+\author{cute-tutorial}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+\begin{frame}{What is CuTe DSL?}
+  \begin{center}
+    \large
+    Write GPU kernels in \textbf{Python}.\\[0.3em]
+    Compile straight to \textbf{PTX / cubin}.
+  \end{center}
+
+  \vspace{1em}
+  \begin{itemize}
+    \item Layout algebra --- \code{(Shape):(Stride)}
+    \item One \code{cute.Tensor} for GMEM / SMEM / registers
+    \item Direct access to TMA, Tensor Core MMA, mbarriers
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Outline --- Three Modules}
+  \begin{itemize}
+    \item[\textbf{1}] \hyperlink{mod:core}{\textbf{Core Foundations}}\\
+          {\small Python $\rightarrow$ GPU code, layouts \& tensors}
+    \vspace{0.6em}
+    \item[\textbf{2}] \hyperlink{mod:simt}{\textbf{SIMT Programming Model}}\\
+          {\small threads move data and do scalar work}
+    \vspace{0.6em}
+    \item[\textbf{3}] \hyperlink{mod:gemm}{\textbf{Hardware GEMM \& Async Pipelines}}\\
+          {\small TMA, MMA, and mbarriers toward Blackwell GEMM}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \hypertarget{mod:core}{}
+  \centering
+  \vfill
+  {\small\color{gray} Module 1}\\[0.5em]
+  {\Huge\bfseries Core Foundations}\\[1em]
+  {\large Python $\rightarrow$ GPU code, layouts \& tensors}
+  \vfill
+\end{frame}
+
+\begin{frame}{Two Decorators: \code{@cute.jit} and \code{@cute.kernel}}
+Two entry points:
+\begin{itemize}
+  \item \code{@cute.jit}: host-side JIT functions
+  \item \code{@cute.kernel}: GPU kernels
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{The First Example}
+\begin{minted}{python}
+import cutlass
+import cutlass.cute as cute 
+
+@cute.jit
+def add_dynamicexpr(b: cutlass.Float32):
+    a = cutlass.Float32(2.0)
+    result = a + b
+    print("[meta-stage] result =", result)  
+    cute.printf("[object-stage] result = %f\n", result)  
+
+add_dynamicexpr(5.0)
+
+\end{minted}  
+\end{frame}
+
+\begin{frame}{General Mechanism: Same Python Code Runs Twice}
+  \begin{center}
+    \large
+    The same function body is used in two different contexts:\\
+    first to \textbf{build IR}, then to \textbf{run the compiled program}.
+  \end{center}
+
+  \vspace{0.6em}
+  \begin{enumerate}
+    \item \textbf{Pre-stage:} CuTe DSL rewrites the Python AST to capture structure.
+    \item \textbf{Meta-stage:} Python runs on the host with proxy arguments; tensor operations emit MLIR.
+    \item \textbf{Object-stage:} MLIR is lowered and compiled; emitted operations run at runtime.
+  \end{enumerate}
+
+  \vspace{0.4em}
+  \begin{itemize}
+    \item \code{print()} runs during tracing.
+    \item \code{cute.printf()} does not print during tracing; it is emitted as \code{cute.print}.
+  \end{itemize}
+
+\end{frame}
+
+
+
+\begin{frame}{What Happens When We Call \code{add_dynamicexpr(5.0)}?}
+  \begin{center}
+    \code{add_dynamicexpr(5.0)}
+    \quad$\rightarrow$\quad
+    \textbf{rewrite}
+    \quad$\rightarrow$\quad
+    \textbf{trace}
+    \quad$\rightarrow$\quad
+    \textbf{lower + compile}
+  \end{center}
+
+  \vspace{0.8em}
+  \begin{enumerate}
+    \item \textbf{Pre-stage: rewrite the Python AST}\\
+          {\small Capture control-flow structure. For this straight-line example, there is no branch or loop to preserve.}
+    \vspace{0.45em}
+    \item \textbf{Meta-stage: run Python with proxy values (tracing)}\\
+          {\small The function body executes on the host; tensor operations append MLIR to the current block.}
+    \vspace{0.45em}
+    \item \textbf{Object-stage: lower and compile MLIR}\\
+          {\small The completed IR is lowered toward PTX/SASS; emitted operations run later.}
+  \end{enumerate}
+
+  \vfill
+  \begin{center}
+    \small The next slides zoom into the \textbf{meta-stage} one statement at a time.
+  \end{center}
+\end{frame}
+
+
+\begin{frame}[fragile]{Tracing Step by Step: \code{add_dynamicexpr(5.0)}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Tracing code}
+\begin{TraceCode}
+!color{TraceDone}@cute.jit
+!color{TraceDone}def add_dynamicexpr(b: cutlass.Float32):
+!color{TraceDone}    a = cutlass.Float32(2.0)
+!color{TraceFuture}    result = a + b
+!color{TraceFuture}    print("[meta-stage] result =", result)
+!color{TraceFuture}    cute.printf("[object-stage] result = %f\n",
+!color{TraceFuture}                result)
+\end{TraceCode}
+  \end{column}
+  \begin{column}{0.52\textwidth}
+    \small\textbf{MLIR}
+\begin{lstlisting}[style=traceir]
+// no IR operation yet
+\end{lstlisting}
+
+    \vspace{0.45em}
+    \small\textbf{Terminal}
+\begin{lstlisting}[style=terminal]
+<no output yet>
+\end{lstlisting}
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tracing Step by Step: \code{add_dynamicexpr(5.0)}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Tracing code}
+\begin{TraceCode}
+!color{TraceDone}@cute.jit
+!color{TraceDone}def add_dynamicexpr(b: cutlass.Float32):
+!color{TraceDone}    a = cutlass.Float32(2.0)
+!color{TraceDone}    result = a + b
+!color{TraceFuture}    print("[meta-stage] result =", result)
+!color{TraceFuture}    cute.printf("[object-stage] result = %f\n",
+!color{TraceFuture}                result)
+\end{TraceCode}
+  \end{column}
+  \begin{column}{0.52\textwidth}
+    \small\textbf{MLIR}
+\begin{lstlisting}[style=traceir]
+%cst = arith.constant 2.000000e+00 : f32
+%0 = arith.addf %cst, %arg0 : f32
+\end{lstlisting}
+
+    \vspace{0.45em}
+    \small\textbf{Terminal}
+\begin{lstlisting}[style=terminal]
+<no output yet>
+\end{lstlisting}
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tracing Step by Step: \code{add_dynamicexpr(5.0)}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Tracing code}
+\begin{TraceCode}
+!color{TraceDone}@cute.jit
+!color{TraceDone}def add_dynamicexpr(b: cutlass.Float32):
+!color{TraceDone}    a = cutlass.Float32(2.0)
+!color{TraceDone}    result = a + b
+!color{TraceDone}    print("[meta-stage] result =", result)
+!color{TraceFuture}    cute.printf("[object-stage] result = %f\n",
+!color{TraceFuture}                result)
+\end{TraceCode}
+  \end{column}
+  \begin{column}{0.52\textwidth}
+    \small\textbf{MLIR}
+\begin{lstlisting}[style=traceir]
+%cst = arith.constant 2.000000e+00 : f32
+%0 = arith.addf %cst, %arg0 : f32
+\end{lstlisting}
+
+    \vspace{0.45em}
+    \small\textbf{Terminal}
+\begin{lstlisting}[style=terminal]
+[meta-stage] result = ?
+\end{lstlisting}
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tracing Step by Step: \code{add_dynamicexpr(5.0)}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Tracing code}
+\begin{TraceCode}
+!color{TraceDone}@cute.jit
+!color{TraceDone}def add_dynamicexpr(b: cutlass.Float32):
+!color{TraceDone}    a = cutlass.Float32(2.0)
+!color{TraceDone}    result = a + b
+!color{TraceDone}    print("[meta-stage] result =", result)
+!color{TraceDone}    cute.printf("[object-stage] result = %f\n",
+!color{TraceDone}                result)
+\end{TraceCode}
+  \end{column}
+  \begin{column}{0.52\textwidth}
+    \small\textbf{MLIR}
+\begin{lstlisting}[style=traceir]
+%cst = arith.constant 2.000000e+00 : f32
+%0 = arith.addf %cst, %arg0 : f32
+cute.print("[object-stage] result = %f\0A\0A", %0) : f32
+\end{lstlisting}
+
+    \vspace{0.45em}
+    \small\textbf{Terminal}
+\begin{lstlisting}[style=terminal]
+[meta-stage] result = ?
+\end{lstlisting}
+
+    \vspace{0.25em}
+    \footnotesize\color{TraceNote}
+    No new trace-time output: \code{cute.printf} was emitted as \code{cute.print}.
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Trace-Time Branching: \code{if cutlass.const_expr(...)}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Tracing code}
+\begin{TraceCode}
+!color{TraceDone}@cute.jit
+!color{TraceDone}def choose_path(x: cutlass.Int32,
+!color{TraceDone}                use_fast: cutlass.Constexpr):
+!color{TraceDone}    if cutlass.const_expr(use_fast):
+!color{TraceDone}        print("[trace] selected fast path")
+!color{TraceDone}        y = x + cutlass.Int32(1)
+!color{TraceFuture}    else:
+!color{TraceFuture}        print("[trace] selected slow path")
+!color{TraceFuture}        y = x + cutlass.Int32(100)
+!color{TraceFuture}    cute.printf("[runtime] y = {}\n", y)
+\end{TraceCode}
+  \end{column}
+  \begin{column}{0.52\textwidth}
+    \small\textbf{MLIR}
+\begin{lstlisting}[style=traceir]
+%c1_i32 = arith.constant 1 : i32
+%0 = arith.addi %arg0, %c1_i32 : i32
+\end{lstlisting}
+
+    \vspace{0.45em}
+    \small\textbf{Terminal}
+\begin{lstlisting}[style=terminal]
+[trace] selected fast path
+\end{lstlisting}
+
+    \vspace{0.25em}
+    \footnotesize\color{TraceNote}
+    The false branch is not traced, so there is no \code{scf.if} and no \code{+100} path in the IR.
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Trace-Time Branching: \code{if cutlass.const_expr(...)}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Tracing code}
+\begin{TraceCode}
+!color{TraceDone}@cute.jit
+!color{TraceDone}def choose_path(x: cutlass.Int32,
+!color{TraceDone}                use_fast: cutlass.Constexpr):
+!color{TraceDone}    if cutlass.const_expr(use_fast):
+!color{TraceDone}        print("[trace] selected fast path")
+!color{TraceDone}        y = x + cutlass.Int32(1)
+!color{TraceFuture}    else:
+!color{TraceFuture}        print("[trace] selected slow path")
+!color{TraceFuture}        y = x + cutlass.Int32(100)
+!color{TraceDone}    cute.printf("[runtime] y = {}\n", y)
+\end{TraceCode}
+  \end{column}
+  \begin{column}{0.52\textwidth}
+    \small\textbf{MLIR}
+\begin{lstlisting}[style=traceir]
+%c1_i32 = arith.constant 1 : i32
+%0 = arith.addi %arg0, %c1_i32 : i32
+cute.print("[runtime] y = {}\0A\0A", %0) : i32
+\end{lstlisting}
+
+    \vspace{0.45em}
+    \small\textbf{Terminal}
+\begin{lstlisting}[style=terminal]
+[trace] selected fast path
+\end{lstlisting}
+
+    \vspace{0.25em}
+    \footnotesize\color{TraceNote}
+    \code{print} ran during tracing; \code{cute.printf} became \code{cute.print}.
+  \end{column}
+\end{columns}
+\end{frame}
+
+\end{document}

@@ -24,3 +24,14 @@ module attributes {gpu.container_module} {
 
 We can see that `y` - the constexpr argument becomes a hard-coded constant `2` in the generated IR while `x` - the dynamic
 argument stays as a regular function argument (`%arg0`).
+
+# Trace-time branch selection
+
+`trace_if_constexpr_ir.py` instruments a branch guarded by `cutlass.const_expr`.
+Only the selected branch is traced and emitted; the other branch does not appear in the generated MLIR.
+
+Run:
+
+```
+python 02-constexpr/trace_if_constexpr_ir.py
+```

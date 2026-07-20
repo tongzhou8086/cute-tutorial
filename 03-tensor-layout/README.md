@@ -1,9 +1,9 @@
-# Dynamic and Static Layout
+# 03 - Tensor Layout
 
 Running the `main.py` produces the following output:
 
 ```
-(base) ➜  cute-tutorial git:(main) ✗ python 03-torch-tensors/main.py
+(base) ➜  cute-tutorial git:(main) ✗ python 03-tensor-layout/main.py
 (?,?):(?{i64},1)
 tensor: raw_ptr(0x0000561885b1e4c0: i16, generic, align<2>) o (2,2):(2,1)
 tensor: raw_ptr(0x00005618864250c0: i16, generic, align<2>) o (3,2):(2,1)
@@ -12,7 +12,7 @@ tensor: raw_ptr(0x00005618863e1640: i16, generic, align<2>) o (3):(1) =
   ( 1, 2, 3 )
 ```
 
-# What Does (2,2):(2,1) Mean?
+## What Does `(2,2):(2,1)` Mean?
 
 In CuTe DSL, the colon `:` does not separate dimensions like rows and columns. Instead, it separates the **Shape** from the **Stride**.
 

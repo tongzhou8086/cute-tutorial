@@ -32,6 +32,11 @@ JIT chapter, but with the parameter marked as `cutlass.Constexpr` and the local
 typed literal written as `a: cutlass.Float32 = 2.0`. The generated IR bakes in
 the value instead of passing it as a runtime `%arg0`.
 
+`trace_if_constexpr_value_ir.py` shows that a `cutlass.Constexpr` value alone
+does not make a plain `if use_fast:` a trace-time branch. CuTe still rewrites it
+as control flow, so the generated MLIR contains `scf.if` with a constant
+predicate.
+
 `trace_if_constexpr_ir.py` instruments a branch guarded by `cutlass.const_expr`.
 Only the selected branch is traced and emitted; the other branch does not appear
 in the generated MLIR.
@@ -40,5 +45,6 @@ Run:
 
 ```
 python 02-constexpr/trace_constexpr_dynamicexpr_ir.py
+python 02-constexpr/trace_if_constexpr_value_ir.py
 python 02-constexpr/trace_if_constexpr_ir.py
 ```

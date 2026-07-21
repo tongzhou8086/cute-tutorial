@@ -28,7 +28,7 @@ import cutlass.cute as cute
 
 @cute.jit
 def add_dynamicexpr(b: cutlass.Float32):
-    a = cutlass.Float32(2.0)
+    a: cutlass.Float32 = 2.0
     result = a + b
     print("[meta-stage] result =", result)              # host, at trace time
     cute.printf("[object-stage] result = %f\n", result) # GPU, at launch time
@@ -107,7 +107,7 @@ import cutlass.cute as cute
 
 @cute.jit
 def add_dynamicexpr(b: cutlass.Float32):
-    a = cutlass.Float32(2.0)
+    a: cutlass.Float32 = 2.0
     result = a + b
     print("[meta-stage] result =", result)
     cute.printf("[object-stage] result = %f\n", result)
@@ -142,10 +142,17 @@ and launches the host function directly.
 
 One way is to run the command with `CUTE_DSL_KEEP=ir` which dumps the generated IR to files in the current working dir.
 
+`trace_runtime_branch_ir.py` instruments a runtime `if` over a dynamic DSL
+value. The branch predicate and both branch regions appear in MLIR as `scf.if`.
+
 ## Files
 
 - `main.py` — both demos in one script: direct `@cute.jit` calls (meta-stage
   fires on every call), followed by the `cute.compile` route (meta-stage fires
   exactly once).
+- `trace_dynamicexpr_ir.py` — incremental MLIR snapshots for the straight-line
+  dynamic-expression example.
+- `trace_runtime_branch_ir.py` — incremental MLIR snapshot for runtime control
+  flow.
 
 [cache-docs]: https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/cute_dsl_general/dsl_jit_caching.html

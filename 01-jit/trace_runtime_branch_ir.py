@@ -15,17 +15,17 @@ def dump_block(label: str) -> None:
 
 
 @cute.jit
-def choose_path(x: cutlass.Int32, use_fast: cutlass.Constexpr):
+def choose_runtime(x: cutlass.Int32):
     dump_block("entry")
 
-    if cutlass.const_expr(use_fast):
-        print("[trace] building fast branch")
-        cute.printf("[runtime] y = %d\n", x + cutlass.Int32(1))
+    if x > cutlass.Int32(0):
+        print("[trace] building then branch")
+        cute.printf("[runtime] positive\n")
     else:
-        print("[trace] building slow branch")
-        cute.printf("[runtime] y = %d\n", x + cutlass.Int32(100))
-    dump_block("after constexpr if")
+        print("[trace] building else branch")
+        cute.printf("[runtime] non-positive\n")
+    dump_block("after dynamic if")
 
 
 if __name__ == "__main__":
-    cute.compile(choose_path, cutlass.Int32(0), True)
+    cute.compile(choose_runtime, cutlass.Int32(0))

@@ -4,7 +4,7 @@ import cutlass.cute as cute
 
 @cute.jit
 def add_dynamicexpr(b: cutlass.Float32):
-    a = cutlass.Float32(2.0)
+    a: cutlass.Float32 = 2.0
     result = a + b
     print("[meta-stage] result =", result)              # host, at trace time
     cute.printf("[object-stage] result = %f\n", result)  # GPU, at launch time

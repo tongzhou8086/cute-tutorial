@@ -138,6 +138,20 @@
   \vfill
 \end{frame}
 
+\begin{frame}{Core Foundations Roadmap}
+  \begin{itemize}
+    \item \textbf{Entry points:} \code{@cute.jit} for host-side JIT logic, \code{@cute.kernel} for GPU kernels.
+    \vspace{0.45em}
+    \item \textbf{Tracing model:} the same Python code builds IR first, then compiled code runs later.
+    \vspace{0.45em}
+    \item \textbf{Dynamic vs. constant arguments:} runtime values stay as IR arguments; \code{Constexpr} values specialize the generated code.
+    \vspace{0.45em}
+    \item \textbf{JIT cache and executors:} direct calls trace every time; \code{cute.compile} returns a reusable executor.
+    \vspace{0.45em}
+    \item \textbf{Tensor layouts:} CuTe describes tensors with \code{(Shape):(Stride)} and supports static or dynamic layout fields.
+  \end{itemize}
+\end{frame}
+
 \begin{frame}{Two Decorators: \code{@cute.jit} and \code{@cute.kernel}}
 Two entry points:
 \begin{itemize}
@@ -981,6 +995,272 @@ tensor: ... o (3,2):(2,1)
     \footnotesize\color{TraceNote}
     The generated code keeps selected layout fields dynamic, so one compiled
     function can handle multiple compatible runtime shapes.
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[plain]
+  \hypertarget{mod:simt}{}
+  \centering
+  \vfill
+  {\small\color{gray} Module 2}\\[0.5em]
+  {\Huge\bfseries SIMT Programming Model}\\[1em]
+  {\large threads, CTAs, scalar work, and tile ownership}
+  \vfill
+\end{frame}
+
+\begin{frame}{SIMT Module Roadmap}
+  \begin{itemize}
+    \item \textbf{Vector add:} first \code{@cute.kernel}; one thread owns one element.
+    \vspace{0.45em}
+    \item \textbf{Reductions:} threads cooperate on scalar work.
+    \vspace{0.45em}
+    \item \textbf{2D indexing:} map a flat thread id to \code{(row, col)} tensor coordinates.
+    \vspace{0.45em}
+    \item \textbf{CTA tile views:} use \code{cute.local_tile} so each CTA owns a rectangular tile.
+    \vspace{0.45em}
+    \item \textbf{Shared-memory staging:} introduce \code{make_layout}, \code{SmemAllocator}, and CTA barriers.
+  \end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{Vector Add: Familiar CUDA-Style SIMT}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.52\textwidth}
+    \small\textbf{GPU kernel}
+\begin{TraceCode}
+@cute.kernel
+def vector_add_kernel(a: cute.Tensor,
+                      b: cute.Tensor,
+                      c: cute.Tensor):
+    tidx, _, _ = cute.arch.thread_idx()
+    bidx, _, _ = cute.arch.block_idx()
+    bdim, _, _ = cute.arch.block_dim()
+
+    idx = bidx * bdim + tidx
+    n = a.shape[0]
+
+    if idx < n:
+        c[idx] = a[idx] + b[idx]
+\end{TraceCode}
+  \end{column}
+
+  \begin{column}{0.46\textwidth}
+    \small\textbf{Host JIT launcher}
+\begin{TraceCode}
+@cute.jit
+def vector_add(a: cute.Tensor,
+               b: cute.Tensor,
+               c: cute.Tensor):
+    n = a.shape[0]
+    grid = cute.ceil_div(n, THREADS_PER_BLOCK)
+    vector_add_kernel(a, b, c).launch(
+        grid=(grid, 1, 1),
+        block=(THREADS_PER_BLOCK, 1, 1),
+    )
+\end{TraceCode}
+
+    \vspace{0.45em}
+    \footnotesize\color{TraceNote}
+    One thread owns one element. \code{cute.arch.*} gives CUDA-style indices;
+    tensor indexing expresses global-memory loads and stores.
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Reduction: Shared Memory + One Atomic}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.52\textwidth}
+    \small\textbf{GPU kernel}
+\begin{lstlisting}[style=traceir]
+@cute.kernel
+def reduce_kernel(src, out, smem_layout):
+    tidx, _, _ = cute.arch.thread_idx()
+    bidx, _, _ = cute.arch.block_idx()
+    idx = bidx * BLOCK + tidx
+
+    buf = SmemAllocator().allocate_tensor(
+        cutlass.Float32, smem_layout)
+
+    buf[tidx] = cutlass.Float32(0.0)
+    if idx < src.shape[0]:
+        buf[tidx] = src[idx]
+    cute.arch.barrier()
+
+    stride = BLOCK // 2
+    while stride > 0:
+        if tidx < stride:
+            buf[tidx] += buf[tidx + stride]
+        cute.arch.barrier()
+        stride = stride // 2
+
+    if tidx == 0:
+        cute.arch.atomic_add(out.iterator, buf[0])
+\end{lstlisting}
+  \end{column}
+
+  \begin{column}{0.46\textwidth}
+    \small\textbf{Host JIT launcher}
+\begin{TraceCode}
+@cute.jit
+def reduce_sum(src: cute.Tensor,
+               out: cute.Tensor):
+    n = src.shape[0]
+    grid = cute.ceil_div(n, BLOCK)
+    smem_layout = cute.make_layout(BLOCK)
+
+    reduce_kernel(src, out, smem_layout).launch(
+        grid=(grid, 1, 1),
+        block=(BLOCK, 1, 1),
+    )
+\end{TraceCode}
+
+    \vspace{0.45em}
+    \footnotesize\color{TraceNote}
+    The host initializes \code{out[0] = 0}. Each CTA reduces into shared memory;
+    one thread atomically adds the CTA sum to the global result.
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\code{cute.make_layout}: Shape + Stride}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Signature}
+\begin{lstlisting}[style=traceir]
+cute.make_layout(shape, *, stride=None)
+\end{lstlisting}
+
+    \vspace{0.35em}
+    \begin{itemize}
+      \item \code{shape}: integer or tuple of mode sizes.
+      \item \code{stride}: optional keyword-only stride.
+      \item returns a \code{cute.Layout}.
+    \end{itemize}
+  \end{column}
+
+  \begin{column}{0.48\textwidth}
+    \small\textbf{Common uses}
+\begin{lstlisting}[style=traceir]
+// 1D compact scratch
+smem_layout = cute.make_layout(BLOCK)
+
+// 2D row-major tile
+tile_layout = cute.make_layout(
+    (TILE_M, TILE_N),
+    stride=(TILE_N, 1),
+)
+
+smem = SmemAllocator()
+buf = smem.allocate_tensor(
+    cutlass.Float32, smem_layout)
+\end{lstlisting}
+
+    \vspace{0.25em}
+    \footnotesize\color{TraceNote}
+    If \code{stride} is omitted, CuTe computes a default "left-most" layout.
+    Pass \code{stride=} when the physical memory order matters.
+  \end{column}
+\end{columns}
+
+\vfill
+{\tiny API doc: \url{https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/cute_dsl_api/cute.html\#cutlass.cute.make_layout}}
+
+\end{frame}
+
+\begin{frame}[fragile]{2D Indexing: Flat Thread Id to \code{(row, col)}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.52\textwidth}
+    \small\textbf{GPU kernel}
+\begin{lstlisting}[style=traceir]
+@cute.kernel
+def copy_2d_kernel(src: cute.Tensor,
+                   dst: cute.Tensor):
+    tidx, _, _ = cute.arch.thread_idx()
+    bidx, _, _ = cute.arch.block_idx()
+    bdim, _, _ = cute.arch.block_dim()
+
+    linear = bidx * bdim + tidx
+    rows, cols = src.shape
+    numel = rows * cols
+
+    if linear < numel:
+        row = linear // cols
+        col = linear % cols
+        dst[row, col] = src[row, col]
+\end{lstlisting}
+  \end{column}
+
+  \begin{column}{0.46\textwidth}
+    \small\textbf{Host JIT launcher}
+\begin{lstlisting}[style=traceir]
+@cute.jit
+def copy_2d(src: cute.Tensor,
+            dst: cute.Tensor):
+    rows, cols = src.shape
+    n = rows * cols
+    grid = cute.ceil_div(
+        n, THREADS_PER_BLOCK)
+
+    copy_2d_kernel(src, dst).launch(
+        grid=(grid, 1, 1),
+        block=(THREADS_PER_BLOCK, 1, 1),
+    )
+\end{lstlisting}
+
+    \vspace{0.45em}
+    \footnotesize\color{TraceNote}
+    Same SIMT skeleton as vector add. The only new step is decoding one flat
+    element id into tensor coordinates.
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{CTA Tile Views with \code{cute.local_tile}}
+\begin{columns}[T,totalwidth=\textwidth]
+  \begin{column}{0.56\textwidth}
+    \small\textbf{GPU kernel}
+\begin{lstlisting}[style=traceir]
+@cute.kernel
+def local_tile_copy_kernel(src: cute.Tensor,
+                           dst: cute.Tensor):
+    tidx, _, _ = cute.arch.thread_idx()
+    block_m, block_n, _ = cute.arch.block_idx()
+    block_dim, _, _ = cute.arch.block_dim()
+
+    src_tile = cute.local_tile(
+        src, (TILE_M, TILE_N), (block_m, block_n))
+    dst_tile = cute.local_tile(
+        dst, (TILE_M, TILE_N), (block_m, block_n))
+
+    i = tidx
+    while i < TILE_M * TILE_N:
+        row = i // TILE_N
+        col = i % TILE_N
+        dst_tile[row, col] = src_tile[row, col]
+        i += block_dim
+\end{lstlisting}
+  \end{column}
+
+  \begin{column}{0.40\textwidth}
+    \small\textbf{Host JIT launcher}
+\begin{lstlisting}[style=traceir]
+@cute.jit
+def local_tile_copy(src: cute.Tensor,
+                    dst: cute.Tensor):
+    rows, cols = src.shape
+    grid_m = cute.ceil_div(rows, TILE_M)
+    grid_n = cute.ceil_div(cols, TILE_N)
+
+    local_tile_copy_kernel(src, dst).launch(
+        grid=(grid_m, grid_n, 1),
+        block=(THREADS_PER_CTA, 1, 1),
+    )
+\end{lstlisting}
+
+    \vspace{0.35em}
+    \footnotesize\color{TraceNote}
+    \textbf{\code{local_tile} returns a tensor view; it does not copy data.}
   \end{column}
 \end{columns}
 \end{frame}
